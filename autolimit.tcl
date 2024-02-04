@@ -1,109 +1,132 @@
-# Auto-limit 0.52 by perpleXa.
-# This script is similar to Q's auto-limit feature (+c).
-# It must not be used in conjunction with chanmode +D (auditorium mode).
-# Type $autolimt in a channel for more info..
+#         Script : AutoLimit v1.02 by David Proper (Dr. Nibble [DrN])
+#                  Copyright 2002 Radical Computer Systems
+#
+#       Testing
+#      Platforms : Linux 2.2.16
+#                  Eggdrop v1.6.2
+#            And : SunOS 5.8
+#                  Eggdrop v1.5.4
+#
+#    Description : AutoLimit will let your bot automatically set a new
+#                  channel limit using a predefined set of values.
+#                  If anything it should help in botnet/clone attacks.
+#
+#        History : 05/02/2001 - First Release
+#                  03/29/2002 - v1.01
+#                              o Fixed logic problem
+#                  06/21/2002 - v1.02
+#                              o Wont reset limit if it's the same.
+#
+#
+#   Future Plans : Good question. Send in any ideas.
+#
+# Author Contact :     Email - DProper@stx.rr.com
+#                  Home Page - http://home.stx.rr.com/dproper
+#       Homepage Direct Link - http://www.chaotix.net:3000/~dproper
+#                        IRC - Primary Nick: DrN
+#                     UseNet - alt.irc.bots.eggdrop
+# Support Channels: #RCS @UnderNet.Org
+#                   #RCS @DALnet
+#                   #RCS @EFnet
+#                   #RCS @GalaxyNet
+#                   #RCS @ChatGalaxy
+#                   #RCS @Choatix Addiction
+#
+#                Current contact information can be located at:
+#                 http://www.chaotix.net:3000/rcs/contact.html
+#
+# New TCL releases are sent to the following sites as soon as they're released:
+#
+# FTP Site                   | Directory                     
+# ---------------------------+-------------------------------
+# ftp.chaotix.net            | /pub/RCS
+# ftp.eggheads.org           | Various
+# drn.realmweb.org           | /drn
+#
+#############################  Chaotix.net has returned
+#
+#   Radical Computer Systems - http://www.chaotix.net:3000/rcs/
+# To subscribe to the RCS mailing list: mail majordomo@chaotix.net and in
+#  BODY of message, type  subscribe rcs-list
+#
+#  Feel free to Email me any suggestions/bug reports/etc.
+# 
+# You are free to use this TCL/script as long as:
+#  1) You don't remove or change author credit
+#  2) You don't release it in modified form. (Only the original)
+# 
+# If you have a "too cool" modification, send it to me and it'll be
+# included in the official release. (With your credit)
+#
+# Commands Added:
+#  Where     F CMD       F CMD         F CMD        F CMD
+#  -------   - --------- - ----------- - ---------- - --------- - -------
+#  Public:   - N/A
+#     MSG:   - N/A
+#     DCC:   - N/A
+#
+# Public Matching: N/A
+#
 
 
-bind pub  n|m "\$autolimit" autolimit:pub
-bind join -|- * autolimit:join
+set autolimit(ver) "v1.02.01"
 
-setudef str "autolimit"
+# This is a list of channels you want an auto-limit on. Multiple channels
+# seperated by spaces.
+set autolimit(chans) "#amiga"
 
-proc autolimit:start {} {
-  foreach channel [channels] {
-    if {[channel get $channel "autolimit"] == ""} {
-      channel set $channel "autolimit" "0"
-    }
-  }
-  utimer 60 autolimit
+# This is the base number to add to the total channel count for the new limit
+set autolimit(base) 10
+
+# This is the difference between the current limit and user count before
+# a new limit is set.
+set autolimit(diff) 5
+
+# This is the timer, in minutes, between checks.
+set autolimit(timer) 10
+
+proc check_autolimit {} {
+ global autolimit
+ foreach c [string tolower [channels]] {
+  autolimit $c
+                   }
+ timer $autolimit(timer) check_autolimit
 }
 
-proc autolimit:join {nickname hostname handle channel} {
-  if {![isbotnick $nickname]} {
-    return 0
-  }
-  if {[channel get $channel "autolimit"] == ""} {
-    channel set $channel "autolimit" "0"
-  }
+proc autolimit {chan} {
+ global autolimit
+
+ set dochan 999
+ foreach c [string tolower $autolimit(chans)] {
+  if {$c == $chan} {set dochan 1}  
+                                              }
+ if {$dochan != 1} {return 0}
+ if {![botonchan $chan]} {return 0}
+ set modes [string tolower [getchanmode $chan]]
+ set modev [lindex $modes 0]
+
+ set count 0
+ set num 0
+ set limit 0
+
+ while {$count < [string length $modev]} {
+  set ch [string index $modev $count]
+  if {$ch == "k"} {incr num}
+  if {$ch == "l"} {incr num
+                   set limit [lindex $modes $num]
+                  }
+  incr count
+                                          }
+ set usercount [llength [chanlist $chan]]
+ if {$limit > $usercount} {set ldiff [expr $limit - $usercount]
+                          } else {set ldiff [expr $usercount - $limit]}
+
+ if {$limit == [expr $usercount + $autolimit(base)]} {return 0}
+
+ if {$ldiff > $autolimit(diff)} {putserv "MODE $chan +l [expr $usercount + $autolimit(base)]"}
 }
 
-proc autolimit:pub {nickname hostname handle channel arguments} {
- global lastbind
-  set argumentc [llength [split $arguments { }]]
-  set option [lindex $arguments 0]
-  set users [llength [chanlist $channel]]
-  if {$argumentc < 1} {
-    set currentlimit [channel get $channel "autolimit"]
-    if {$currentlimit > 0} {
-      putserv "NOTICE $nickname :Current auto-limit is: [channel get $channel "autolimit"]"
-    } else {
-      putserv "NOTICE $nickname :Argument should start with a '#' and a digit. (eg. #10 or on|off)"
-    }
-    return
-  }
-  if {([regexp -nocase -- {(#[0-9]+|off|on)} $option tmp result]) && (![regexp -nocase -- {\S#} $option])} {
-    switch $result {
-      on {
-        channel set $channel "autolimit" "10"
-        putserv "MODE $channel +l [expr $users + 10]"
-        puthelp "NOTICE $nickname :Auto-limit is changed to: +10"
-      }
-      off {
-        channel set $channel "autolimit" "0"
-        putserv "MODE $channel -l *"
-        puthelp "NOTICE $nickname :Done. Auto-limit disabled successfully."
-      }
-      default {
-        if {([regexp {#[0-9]} $result]) && ([string index $result 0] == "#")} {
-          regexp {#([0-9]+)} $result tmp result
-          if {($result < 2)} {
-            set result 2
-          } elseif {($result > 500)} {
-            set result 500
-          }
-          channel set $channel "autolimit" "$result"
-          putserv "MODE $channel +l [expr $users + $result]"
-          puthelp "NOTICE $nickname :Auto-limit is changed to: $result"
-        }
-      }
-    }
-  } else {
-    puthelp "NOTICE $nickname :Argument should start with a '#' and a digit. (eg. #10 or on|off)"
-  }
-}
+timer $autolimit(timer) check_autolimit
+putlog "AutoLimit $autolimit(ver) by David Proper (DrN) -: LoadeD :-"
+return "AutoLimit $autolimit(ver) by David Proper (DrN) -: LoadeD :-"
 
-proc autolimit {} {
-  if {![string match *autolimit* [utimers]]} {
-    utimer 60 autolimit
-  }
-  foreach channel [channels] {
-    set autolimit [channel get $channel "autolimit"]
-    if {(![botisop $channel]) || ($autolimit == "0")} {
-      continue
-    }
-    set users [llength [chanlist $channel]]
-    set newlimit [expr $users + $autolimit]
-    set chanmodes [getchanmode $channel]
-    if {[string match *l* [lindex $chanmodes 0]]} {
-      regexp {\S[\s]([0-9].*)} $chanmodes tmp currentlimit
-    } else {
-      set currentlimit 0
-    }
-    if {$newlimit == $currentlimit} {continue}
-    if {$newlimit > $currentlimit} {
-      set difference [expr $newlimit - $currentlimit]
-    } elseif {$newlimit < $currentlimit} {
-      set difference [expr $currentlimit - $newlimit]
-    }
-    if {($difference <= [expr round($autolimit * 0.5)]) && ($autolimit > 5)} {
-      continue
-    } elseif {($difference < [expr round($autolimit * 0.38)]) && ($autolimit <= 5)} {
-      continue
-    }
-    putserv "mode $channel +l $newlimit"
-  }
-}
-
-autolimit:start
-
-putlog "Script loaded: auto-limit by perpleXa"

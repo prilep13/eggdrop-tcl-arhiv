@@ -1,7 +1,7 @@
+# Getops 2.6
+# For 1.6.x (maybe others too)
 
-# Getops 2.3b
-
-# This script is used for bots to request and give ops to each other.
+# This script is used for bots to request and give ops to each other. 
 # For this to work, you'll need:
 
 # - Bots must be linked in a botnet
@@ -20,49 +20,25 @@
 
 # -----------------------------------------------------------------------------
 
-# 2.3c by PPSlim <ppslim@ntlworld.com>
-#  - Small fix on timer handling.
-#    Not list formatted, allowing command parsing of channel name
+# 2.6 by Flash (Julien Wajsberg <flash@minet.net>)
+# - Fixed a little typo
+# - Removed some unused code
+# - Patched the isvo function to make it work again with 1.6.x
+# - TODO : maybe play around the new "bind NEED" command, but it would make
+# this script 1.6.x-specific, and I don't think it's worth doing this.
 
-# 2.3b by gregul <unknown>
-#  - small fix in getbot
+# 2.5 by aerosoul
+# - added random delay to give op procedure so channels with big
+#   botnets won't be mode flooded on bot join
+#   you can turn this off with set go_delay 0
 
-# 2.3a by guppy <guppy@eggheads.org>
-#  - fix for bind need
+# 2.4 by fantomas again
+#  - console +d shows you requests from bots
+# - copyleft info was too long, truncated
 
-# 2.3 by guppy <guppy@eggheads.org>
-#  - minor cleanup to use some 1.6 tcl functions
-#  - use bind need over need-op, need-invite, etc ...
-
-# 2.2g by poptix <poptix@poptix.net>
-#  - Fabian's 2.2e broke the script, fixed.
-
-# 2.2f by Eule <eule@berlin.snafu.de>
-#  - removed key work-around added in 2.2d as eggdrop now handles this
-#    correctly.
-
-# 2.2e by Fabian <fknittel@gmx.de>
-#  - added support for !channels (so-called ID-channels), using chandname2name
-#    functions. This makes it eggdrop 1.5+ specific.
-
-# 2.2d by brainsick <brnsck@mail.earthlink.net>
-#  - Undernet now handles keys differently.  It no longer gives the key on a
-#    join, but instead gives it on an op, but eggdrop doesn't check for this.
-#    getops-2.2d should now handle this correctly.  (This should be the final
-#    fix to the key problems.)
-
-# 2.2c by Progfou (Jean Christophe ANDRE <progfou@rumiko.info.unicaen.fr>)
-#  - changed "Requested" to "Requesting" as it was a little confusing
-#  - corrected the "I am not on chan..." problem with key request
-#    (thanks to Kram |FL| and Gael for reporting it)
-#  - removed more unnecessary check
-
-# 2.2b by Progfou (Jean Christophe ANDRE <progfou@rumiko.info.unicaen.fr>)
-#  - removed global +o in unknown bot test
-#  - removed unnecessary checks due to previous unknown bot test
-
-# 2.2a by Progfou (Jean Christophe ANDRE <progfou@rumiko.info.unicaen.fr>)
-#  - removed Polish language!
+# 2.3 by fantomas
+#  - rewritten back to english
+#  - little bug (forgot to match chan attributes)
 
 # 2.2 by Cron (Arkadiusz Miskiewicz <misiek@zsz2.starachowice.pl>)
 #  - works good (tested on eggdrop 1.3.11)
@@ -91,15 +67,13 @@
 # - I also took that annoying wallop and resynch stuff out :P
 # - And I guess this will with with 1.3.x too
 
-# Previously by The_O, dtM.
-
-# Original incarnation by poptix (poptix@poptix.net)
+# Previously by The_O, dtM and poptix.
 
 # -----------------------------------------------------------------------------
 
 # [0/1] do you want GetOps to notice when some unknown (unauthorized) bot
 #       sends request to your bot
-set go_bot_unknown 1
+set go_bot_unknown 0
 
 # [0/1] do you want your bot to request to be unbanned if it becomes banned?
 set go_bot_unban 1
@@ -108,7 +82,14 @@ set go_bot_unban 1
 set go_cycle 0
 
 # set this to the notice txt for the above (go_cycle)
-set go_cycle_msg "Please part the channel so the bots can cycle!"
+set go_cycle_msg "Please leave the channel so the bots can get op."
+
+# [0/1] do you want GetOps to have random delay for the give op procedure?
+set go_delay 1
+
+# if go_delay is turned on: 
+# how many seconds should the bot at least wait before giving ops?
+set go_mindelay 5
 
 # -----------------------------------------------------------------------------
 
@@ -117,29 +98,29 @@ proc gain_entrance {what chan} {
  global botnick botname go_bot_unban go_cycle go_cycle_msg bns
  switch -exact $what {
   "limit" {
-   foreach bs [lbots] {
+   foreach bs [lbots $chan] {
     putbot $bs "gop limit $chan $botnick"
-    putlog "GetOps: Requesting limit raise from $bs on $chan."
+    putlog "GetOps: Requested limit raise from $bs on $chan."
    }
   }
   "invite" {
-   foreach bs [lbots] {
+   foreach bs [lbots $chan] {
     putbot $bs "gop invite $chan $botnick"
-    putlog "GetOps: Requesting invite from $bs for $chan."
-   }
+    putlog "GetOps: Requested invite from $bs for $chan."
+   }  
   }
   "unban" {
    if {$go_bot_unban} {
-    foreach bs [lbots] {
+    foreach bs [lbots $chan] {
      putbot $bs "gop unban $chan $botname"
-     putlog "GetOps: Requesting unban on $chan from $bs."
+     putlog "GetOps: Requested unban on $chan from $bs."
     }
    }
   }
   "key" {
-   foreach bs [lbots] {
+   foreach bs [lbots $chan] {
     putbot $bs "gop key $chan $botnick"
-    putlog "GetOps: Requesting key on $chan from $bs."
+    putlog "GetOps: Requested key on $chan from $bs."
    }
   }
   "op" {
@@ -152,17 +133,16 @@ proc gain_entrance {what chan} {
     lappend bns "$bot"
     if {$bot != ""} {
      putbot $bot "gop op $chan $botnick"
-     putlog "GetOps: Requesting ops from $bot on $chan"
+     putlog "Requesting ops from $bot on $chan.."
     }
    } {
     if {$go_cycle} {
-     putserv "NOTICE [chandname2name $chan] :$go_cycle_msg"
+     puthelp "NOTICE $chan :$go_cycle_msg"
     }
    }
   }
  }
 }
-
 proc hasops {chan} {
   foreach user [chanlist $chan] {
     if {[isop $user $chan]} {
@@ -176,9 +156,8 @@ proc getbot {chan} {
   global bns
   foreach bn [bots] {
     if {[lsearch $bns $bn] < 0} {
-      if {[matchattr $bn o|o $chan]} {
-	set nick [hand2nick $bn $chan]
-        if {[onchan $nick $chan] && [isop $nick $chan]} {
+      if {([isvo $bn $chan])} {
+        if {([onchan [hand2nick $bn $chan] $chan]) && ([isop [hand2nick $bn $chan] $chan])} {
           return $bn
           break
         }
@@ -188,65 +167,60 @@ proc getbot {chan} {
 }
 
 proc botnet_request {bot com args} {
- global go_bot_unban go_bot_unknown
+ global botnick go_bot_unban go_bot_unknown go_delay go_mindelay
  set args [lindex $args 0]
  set subcom [lindex $args 0]
  set chan [string tolower [lindex $args 1]]
- if {![validchan $chan]} {
-   putbot $bot "gop_resp I don't monitor $chan."
-   return 0
- }
- # Please note, 'chandname2name' will cause an error if it is not a valid channel
- # Thus, we make sure $chan is a valid channel -before- using it. -poptix
- set idchan [chandname2name $chan]
  set nick [lindex $args 2]
 
- if {$subcom != "takekey" && ![botonchan $chan]} {
-  putbot $bot "gop_resp I am not on $chan."
-  return 0
- }
- if {![matchattr $bot b]} {
-  if { $go_bot_unknown == 1} {
-   putlog "GetOps: Request ($subcom) from $bot - unknown bot (IGNORED)"
+ putloglev d * "botnet_request: bot $bot chan $chan nick $nick com $subcom"
+
+  if {([matchattr $bot b] == 0 || [isvo $bot $chan] == 0) && ($subcom != "takekey" ) } {
+   if { $go_bot_unknown == 1} {
+   putlog "GetOps: Request for $subcom from $bot - unauthorised bot (IGNORED)"
   }
   return 0
- }
+  }
 
  switch -exact $subcom {
   "op" {
-   if {![onchan $nick $chan]} {
-    putbot $bot "gop_resp You are not on $chan for me."
+   if {[onchan $nick $chan] == 0} {
+    putbot $bot "gop_resp You're not on $chan."
     return 1
    }
    set bothand [finduser $nick![getchanhost $nick $chan]]
    if {$bothand == "*"} {
     putlog "GetOps: $bot requested ops on $chan. Ident not recognized: $nick![getchanhost $nick $chan]."
-    putbot $bot "gop_resp I don't recognize you on IRC (your ident: $nick![getchanhost $nick $chan])"
+    putbot $bot "gop_resp I don't know you from this ident: $nick![getchanhost $nick $chan]"
     return 1
    }
    if {[string tolower $bothand] == [string tolower $nick]} {
-    putlog "GetOps: $bot requested ops on $chan."
+    putlog "GetOps: $bot requested for op on $chan."
    } {
-    putlog "GetOps: $bot requested ops as $nick on $chan."
+    putlog "GetOps: $bot requested for op as $nick on $chan."
    }
    if {[iso $nick $chan] && [matchattr $bothand b]} {
     if {[botisop $chan]} {
-     if {![isop $nick $chan]} {
-      putlog "GetOps: $nick asked for op on $chan."
-      putbot $bot "gop_resp Opped $nick on $chan."
-      pushmode $chan +o $nick
+     if {[isop $nick $chan] == 0} {
+	if {$go_delay == 1} {
+	 utimer [expr $go_mindelay + [rand 10]] [split "ngop_op $chan $nick $bot"]
+	} else {
+	 putlog "GetOps: $nick opped on $chan."
+	 putbot $bot "gop_resp opping $nick on $chan."
+	 pushmode $chan +o $nick
+	}	
      }
     } {
      putbot $bot "gop_resp I am not +o on $chan."
     }
    } {
-    putbot $bot "gop_resp You aren't +o in my userlist for $chan, sorry."
+    putbot $bot "gop_resp You're noe in my +o list on $chan."
    }
    return 1
   }
   "unban" {
    if {$go_bot_unban} {
-    putlog "GetOps: $bot requested that I unban him on $chan."
+    putlog "GetOps: $bot requested for unban on $chan (unbanning)."
     foreach ban [chanbans $chan] {
      if {[string compare $nick $ban]} {
       set bug_1 [lindex $ban 0]
@@ -256,43 +230,47 @@ proc botnet_request {bot com args} {
     return 1
    } {
     putlog "GetOps: Refused request to unban $bot ($nick) on $chan."
-    putbot $bot "gop_resp Sorry, not accepting unban requests."
+    putbot $bot "gop_resp I won't unban you on $chan."
    }
   }
   "invite" {
-   putlog "GetOps: $bot asked for an invite to $chan."
-   putserv "invite $nick $idchan"
+   putlog "GetOps: $bot requested for invite on $chan."
+   if {[matchattr $bot b]} {
+    putserv "invite $nick $chan"
+   }
    return 1
   }
   "limit" {
-   putlog "GetOps: $bot asked for a limit raise on $chan."
-   pushmode $chan +l [expr [llength [chanlist $chan]] + 1]
+   putlog "GetOps: $bot requested for limit raise on $chan."
+   if {[matchattr $bot b]} {
+    pushmode $chan +l [expr [llength [chanlist $chan]] + 1]
+   }
    return 1
   }
   "key" {
-   putlog "GetOps: $bot requested the key on $chan."
+   putlog "GetOps: $bot requested for key for $chan."
+   if {[onchan $botnick $chan] == 0} {
+    putbot $bot "gop_resp I'm not on $chan."
+    return 1
+    }
    if {[string match *k* [lindex [getchanmode $chan] 0]]} {
     putbot $bot "gop takekey $chan [lindex [getchanmode $chan] 1]"
    } {
-    putbot $bot "gop_resp There isn't a key on $chan!"
+    putbot $bot "gop_resp There's no key needed on $chan!"
    }
    return 1
   }
   "takekey" {
-   putlog "GetOps: $bot gave me the key to $chan! ($nick)"
+   putlog "GetOps: $bot ($nick) gave me key for $chan."
    foreach channel [string tolower [channels]] {
     if {$chan == $channel} {
-     if {$idchan != ""} {
-      putserv "JOIN $idchan $nick"
-     } else {
-      putserv "JOIN $channel $nick"
-     }
+     putserv "JOIN $channel $nick"
      return 1
     }
    }
   }
   default {
-   putlog "GetOps: ALERT! $bot sent fake 'gop' message! ($subcom)"
+   putlog "GetOps: ALERT! $bot send fake 'gop' message! ($subcom)"
   }
  }
 }
@@ -302,11 +280,11 @@ proc gop_resp {bot com msg} {
  return 1
 }
 
-proc lbots {} {
+proc lbots {chan} {
  set unf ""
  foreach users [userlist b] {
   foreach bs [bots] {
-   if {$users == $bs} {
+   if {($users == $bs) && ([matchattr o|o $chan])} {
     lappend unf $users
    }
   }
@@ -318,7 +296,7 @@ proc lbots {} {
 proc lobots { channel } {
  set unf ""
  foreach users [userlist b] {
-  if {![matchattr $users o|o $channel]} { continue }
+  if {[isvo $users $channel] == 0} { continue }
   foreach bs [bots] {
    if {$users == $bs} {	lappend unf $users }
   }
@@ -326,23 +304,48 @@ proc lobots { channel } {
  return $unf
 }
 
-proc iso {nick chan} {
- return [matchattr [nick2hand $nick $chan] o|o $chan]
+proc isvo {hand chan} {
+ if {[matchattr $hand o] || [matchattr $hand |o $chan]} {
+  return 1
+ } {
+  return 0
+ }
 }
 
-proc gop_need {chan type} {
- # Use bind need over setting need-op, need-invite, etc ... 
- gain_entrance $type $chan
+proc iso {nick chan1} {
+ return [isvo [nick2hand $nick $chan1] $chan1]
 }
 
-bind need - * gop_need
+proc do_channels {} {
+ global go_chanset
+ foreach a [string tolower [channels]] {
+  if {[info exist go_chanset($a)] == 0} {
+   channel set $a need-op "gain_entrance op $a"
+   channel set $a need-key "gain_entrance key $a"
+   channel set $a need-invite "gain_entrance invite $a"
+   channel set $a need-unban "gain_entrance unban $a"
+   channel set $a need-limit "gain_entrance limit $a"
+   set go_chanset($a) 1
+  }
+ }
+ if {[string match "*do_channels*" [timers]] == 0} { timer 5 do_channels }
+}
+
+if {[string match "*do_channels*" [utimers]] == 0} {
+ # Set things up one second after starting (dynamic things already loaded)
+ utimer 1 do_channels
+}
+
 bind bot - gop botnet_request
 bind bot - gop_resp gop_resp
+
+# Ask for ops when joining a channel
 bind join - * gop_join
 
 proc requestop { chan } {
  global botnick
  set chan [string tolower $chan]
+ putlog "hopla on arrive dans requestop : chan = $chan"
  foreach thisbot [lobots $chan] {
   # Send request to all, because the bot does not have the channel info yet
   putbot $thisbot "gop op $chan $botnick"
@@ -352,18 +355,32 @@ proc requestop { chan } {
   regsub -all " " $askedbot ", " askedbot
   putlog "GetOps: Requested Ops from $askedbot on $chan."
  } {
-  putlog "GetOps: No bots to ask for ops on $chan."
+  putlog "GetOps: There are no opped bots on $chan."
  }
  return 0
 }
 
 proc gop_join { nick uhost hand chan } {
- if {[isbotnick $nick]} {
- utimer 3 [list requestop $chan]
- }
+ global botnick
+ # Check if it was me joining
+ if {$nick != $botnick} { return 0 }
+ # Adjust channel settings, if needed (e.g when a dynamic channel was added)
+ do_channels
+ # Already done in requestop
+ #set chan [string tolower $chan]
+ # Wait 5 sec, because IRC-lag > Botnet-Lag
+ utimer 5 "requestop $chan"
  return 0
+}
+
+proc ngop_op {chan nick bot} {
+ if {![isop $nick $chan] && [botisop $chan]} {
+        putlog "GetOps: gave $nick delayed op on $chan."
+        putbot $bot "gop_resp opping $nick on $chan."
+        pushmode $chan +o $nick
+ }
 }
 
 set getops_loaded 1
 
-putlog "GetOps v2.3c loaded."
+putlog "GetOps v2.6 loaded."
