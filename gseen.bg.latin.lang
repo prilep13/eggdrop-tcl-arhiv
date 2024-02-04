@@ -1,0 +1,133 @@
+#####################################################################
+#
+# Default Bulgarian langfile for GSeen.Mod v1.1.0
+# by OnGeboren@dal.net or @UniBG.net
+#
+# Mojete da promenite texta, kojto sledva otdolu za da udovletvorite
+# vashite nujdi. Mojete da dobavite ili premahnete vseki etiket kakto
+# jelaete, te ne tryabva da se poyavyavat v nyakakav opredelen red
+# (ili nomer).
+#
+# Ako vuvedete poveche ot edin red za dadeno ID, na proizvolna osnova
+# shte bade izbrano koj red da se izpolzva za otgovora. (tova vse pak
+# ne se otnasya za stringovete za vreme)
+#
+# Ako mislite che ima nujda ot oshte etiketi, pratete mi mail i az
+# moje bi shte go vklyucha v sledvashtoto izdanie.
+#
+# Pulnen list s vuzmojnite Etiketi moje da se nameri v kraya na file-a
+# slang_gseen_commands.c (za sujalenie tam nyama tyahno opisanie)
+#
+#####################################################################
+
+#
+## stringove za vreme
+#
+# vseki string za vreme v edinstveno i mnojestveno chislo
+#
+D 0 godina
+D 1 godini
+D 2 sedmica
+D 3 sedmici
+D 4 den
+D 5 dni
+D 6 chas
+D 7 chasa
+D 8 minuta
+D 9 minuti
+D 10 secund
+D 11 secundi
+# ako nevalidno vreme e vurnato, da se izpolzva sledniyat string
+D 12 izvestno vreme
+
+#
+## Prefixi
+#
+# Tova sa prefixite za otgovorite. Po zadadenost ima prefix samo
+# za publichni zayavki (za da se znae do kogo e adresiran otgovora),
+# no e vazmojno da se definirat prefixi i za drugi zayavki.
+
+# za otgovori v kanala:
+10 <?nick/?>, 
+# za otgovori chrez notice:
+11
+# za otgovori chrez PRIVMSG
+12
+# za otgovori chrez partyline
+13
+
+#
+## greshni otgovori
+#
+54 znaesh li kakvo e parametur?
+54 ne mislish li che tryabva da kajesh koj tarsish?
+54 42.
+55 da ti prilicham na ogledalo? ^_^
+55 ogledalce, ogledalce...
+55 da ne stradash ot razdvuyavane na lichnostta? *eg*
+56 ako ne vijdash <?query/?> v momenta, imash nujda ot novi ochila. ^_^
+56 ya vij po-dobre koj e v kanala!
+57 Sujalyavam, no wildcards ('?' or '*') ne sa pozvoleni pri tarsene.
+58 Hum... ne mislish li che tozi nick e mnogo dalug? ^_^
+58 ne znaesh li che nickovete sa s ogranichena daljina?
+
+#
+## bez resultat
+#
+65 Ne se seshtam da sam vijdal <?query/?>.
+65 <?query/?>? hmm... Opitvam se da se setya... moje bi... Ne sam siguren... ne. Ne se seshtam za <?query/?>.
+66 Ne sam vijdal <?query/?> ot <?laston/?>.
+67 Ne otkrih nikoj kojto da otgovarya na zapitvaneto.
+67 Sujalyavam, no turseneto ti ne varna nikakvi resultati.
+68 Ouch, vasheto tursene varna prekaleno mnogo resultati. Molya stesnete si turseneto.
+
+#
+## jertvata e online
+#
+73 <?query/?> e <?othernick/?> i v momenta e v kanala.
+74 <?query/?> e v <?otherchan/?> tochno sega.
+
+#
+## nameren resultat
+#
+75 Namerih edin resultat:
+76 Namerih <?numresults/?> resultata:
+77 Namerih <?numresults/?> resultata. Eto poslednite 5:
+
+#
+## resultati namereni ot drug bot v botnet-a
+#
+85 <?remotebot/?> kazva: 
+
+#
+## samoto sushtestvo
+#
+101 <?snick/?> (<?shost/?>) za posleden pat beshe vidyan(a) da vliza v <?schan/?> predi <?swhen/?> (<?stime/?>). <?snick/?> e vse oshte tam.
+121 <?snick/?> (<?shost/?>) za posleden pat beshe vidyan(a) da vliza v <?schan/?> predi <?swhen/?> (<?stime/?>), no <?snick/?> se dematerializira misteriozno.
+102 <?snick/?> (<?shost/?>) za posleden pat beshe vidyan(a) da napuska <?schan/?> predi <?swhen/?> (<?stime/?>), sled kato zagubi <?spent/?> tam.
+103 <?snick/?> (<?shost/?>) za posleden pat beshe vidyan(a) da napuska <?schan/?> predi <?swhen/?> (<?stime/?>) zayavyavajki "<?smsg/?>" sled kato zagubi <?spent/?> tam.
+104 <?snick/?> (<?shost/?>) za posleden pat beshe vidyan(a) da si smenya nick-a na <?snick2/?> v <?schan/?> predi <?swhen/?> (<?stime/?>). <?snick2/?> e oshte tam.
+124 <?snick/?> (<?shost/?>) za posleden pat beshe vidyan(a) da si smenya nick-a na <?snick2/?> v <?schan/?> predi <?swhen/?> (<?stime/?>), no <?snick2/?> se dematerializira misteriozno.
+105 <?snick/?> (<?shost/?>) za posleden pat beshe vidyan(a) da si smenya nick-a ot <?snick2/?> v <?schan/?> predi <?swhen/?> (<?stime/?>). <?snick/?> e oshte tam.
+125 <?snick/?> (<?shost/?>) za posleden pat beshe vidyan(a) da si smenya nick-a ot <?snick2/?> v <?schan/?> predi <?swhen/?> (<?stime/?>), no <?snick/?> se dematerializira misteriozno.
+106 <?snick/?> (<?shost/?>) za posleden pat beshe vidyan(a) kato go ritashe <?punisher/?> ot <?schan/?> (<?kickreason/?>) predi <?swhen/?> (<?stime/?>), sled kato toj zagubi <?spent/?> tam.
+107 <?snick/?> (<?shost/?>) za posleden pat beshe vidyan(a) da napuska <?schan/?> poradi split predi <?swhen/?> (<?stime/?>), sled kato zagubi <?spent/?> tam.
+108 <?snick/?> (<?shost/?>) za posleden pat beshe vidyan(a) da se vrashta v <?schan/?> sled split predi <?swhen/?> (<?stime/?>). <?snick/?> e oshte tam.
+128 <?snick/?> (<?shost/?>) za posleden pat beshe vidyan(a) da se vrashta v <?schan/?> sled split predi <?swhen/?> (<?stime/?>), no gospodat na splitovete ne go ostavi da izbyaga, taka che go nyama sega.
+109 <?snick/?> za posleden pat beshe vidyan da vliza v botnet kanala <?schan/?> prez <?bnbot/?> predi <?swhen/?> (<?stime/?>).
+129 <?snick/?> za posleden pat beshe vidyan da vliza v partyline prez <?bnbot/?> predi <?swhen/?> (<?stime/?>).
+110 <?snick/?> za posleden pat beshe vidyan da napuska botnet kanala <?schan/?> prez <?bnbot/?> predi <?swhen/?> (<?stime/?>).
+130 <?snick/?> za posleden pat beshe vidyan da napuska partyline prez <?bnbot/?> predi <?swhen/?> (<?stime/?>).
+140 <?snick/?> (<?shost/?>) za posleden pat beshe vidyan v <?schan/?> predi <?swhen/?> (<?stime/?>).
+
+#
+## izvestyavane za seen
+#
+170 <?rnick/?> (<?rhost/?>) te tarseshe predi <?rwhen/?> (<?rtime/?>) v <?rchan/?>.
+171 Imashe <?requests/?> potrebiteli koito te turseha:
+172 Posledniyat beshe <?rnick/?> (<?rhost/?>) v <?rchan/?> predi <?rwhen/?> (<?rtime/?>).
+
+#
+## seen statistiki
+#
+180 v momenta sledya <?totalnicks/?> potrebitelya, izpolzvajki <?totalbytes/?> baita.

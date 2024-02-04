@@ -1,0 +1,134 @@
+#####################################################################
+#
+# Default English langfile for GSeen.Mod v1.1.0
+#
+# Just edit the text below to fit your needs. You can add or remove
+# any tag just like you want, they do not need to appear in a special
+# order (or number).
+#
+# If you enter more than one line per ID, then a random one will be
+# chosen for each reply. (this does not work for the time strings)
+#
+# If you think you need more tags, just email me and maybe I'll add
+# them in the next release.
+#
+# A complete list of available Tags can be found at the end of the
+# file slang_gseen_commands.c (unfortunately, it does not contain any
+# descriptions for the tags)
+#
+#####################################################################
+# Langage file by MOSSs. #
+# mosss@dal.net.ru       #
+# irc.dal.net.ru         # 
+## time string ###########
+#
+# each time string in singular and plural
+#
+D 0 година
+D 1 години
+D 2 седмица
+D 3 седмици
+D 4 ден
+D 5 дни
+D 6 час
+D 7 часа
+D 8 минута
+D 9 минути
+D 10 секунда
+D 11 секунди
+# if an invalid time value was supplied, output the following string
+D 12 Известно време
+
+#
+## Prefixes
+#
+# These are the prefixes of the replies. By default, there's only
+# a prefix for public requests (so you know for whom the answer is),
+# but you can also define prefixes for other requests.
+
+# for replies in the channel:
+10 <?nick/?>, 
+# for replies via notice:
+11
+# for replies via PRIVMSG
+12
+# for replies on the partyline
+13
+
+#
+## error messages
+#
+54 Май не знаеш какви са параметрите?
+54 Не мислиш ли , че не би било лоши да напишеш за кой ник , който желаеш да намериш?
+54 42.
+55 Да ти приличам на огледало?
+55 Огледалце, Огледалце... на стената...
+55 Да нямаш раздвояване на личността ?
+56 Ако случайно не виждаш тука <?query/?> , по добре иди си купи други очила... :)
+56 я разгледай по добре кои е тука...
+57 за съжаление ('?' или '*') не са разрешени за търсене.
+58 Не ти ли си струва, че ника е малко дълъг?
+58 Не знаеш ли, че дължината на ника си има и лимит? :)
+
+
+#
+## no result
+#
+65 Хмм не помня, да съм виждал <?query/?>.
+65 <?query/?>? хмм... Ще се опитам да се сетя... Може... Неее! Уфф не сам сигурен... Не. Не помня <?query/?>.
+66 Не съм виждал <?query/?> вече <?laston/?>.
+67 Никои не намерих в базата данни за този които търсите.
+67 За съжаление , Търсенето няма резултат.
+68 Ооо, Вашето търсене отговори за огромно количество маски. Изберете моля ви се кого търсите.
+
+#
+## victim is online
+#
+73 <?query/?> си е <?othernick/?>, даже е в канала.
+74 <?query/?> е в <?otherchan/?> в момента.
+
+#
+## results found
+#
+75 Намерих един ника от вашето запитване:
+76 Намерих <?numresults/?> ника за вашето запитване:
+77 Намерих <?numresults/?> ника за вашето запитване. Ето 5 от най-често използваните:
+
+#
+## results found by another bot in the botnet
+#
+85 <?remotebot/?> Каза: 
+
+#
+## the core info
+#
+101 <?snick/?> (<?shost/?>) последно е видян в <?schan/?> преди <?swhen/?> <?stime/?>). <?snick/?> и е все още там.
+121 <?snick/?> (<?shost/?>) последно е видян в <?schan/?> преди <?swhen/?>(<?stime/?>), но <?snick/?> мистично изчезна.
+102 <?snick/?> (<?shost/?>) последно напусна <?schan/?> преди <?swhen/?> (<?stime/?>), след като, седял <?spent/?> там.
+103 <?snick/?> (<?shost/?>) Последния път като е излизал от мрежата е видян в <?schan/?> преди <?swhen/?> (<?stime/?>) съобщение при изход "<?smsg/?>" след като е изкарал <?spent/?> там.
+104 <?snick/?> (<?shost/?>) последния път си е сменил ника от <?snick2/?> в <?schan/?> преди <?swhen/?> (<?stime/?>). <?snick2/?> все още е тука.
+124 <?snick/?> (<?shost/?>) последний раз меня ник с <?snick2/?> на <?schan/?> <?swhen/?> назад (<?stime/?>), но <?snick2/?> мистически исчез.
+105 <?snick/?> (<?shost/?>) последния път си е сменил ника от <?snick2/?> в <?schan/?> преди <?swhen/?> (<?stime/?>). <?snick/?> И май все още си е там.
+125 <?snick/?> (<?shost/?>) последния път си е сменил ника от <?snick2/?> в <?schan/?> преди <?swhen/?> (<?stime/?>), но <?snick/?> мистично изчезна.
+106 <?snick/?> (<?shost/?>) Последно е бил изритан от <?schan/?> Лошия(та) <?punisher/?> (<?kickreason/?>) преди <?swhen/?> (<?stime/?>), след като, е стоял <?spent/?> там.
+107 <?snick/?> (<?shost/?>) последно видян преди да изчезне със сплита  от <?schan/?> преди <?swhen/?> (<?stime/?>), след като, е стоял <?spent/?> там.
+108 <?snick/?> (<?shost/?>) последно е влизал в<?schan/?> след сплита. Преди <?swhen/?> (<?stime/?>) <?snick/?> и си е там.
+128 <?snick/?> (<?shost/?>) последно е влизал в <?schan/?> след сплита. Преди <?swhen/?> (<?stime/?>), но някой (не разбрах кой или IRCop или Services), Не му позволиха да се върне и да остане със нас.
+109 <?snick/?> Последно е влизал в BotNet канал - <?schan/?> от <?bnbot/?> Преди <?swhen/?> (<?stime/?>).
+129 <?snick/?> Последно е влизал на partyline в <?bnbot/?> Преди <?swhen/?> (<?stime/?>).
+110 <?snick/?> Последно е напуснал BotNet канал - <?schan/?> от <?bnbot/?> Преди <?swhen/?> (<?stime/?>).
+130 <?snick/?> Последно е напуснал partyline в <?bnbot/?> Преди <?swhen/?>  (<?stime/?>).
+140 <?snick/?> (<?shost/?>) Последно е бил видян в <?schan/?> Преди <?swhen/?>  (<?stime/?>).
+
+
+#
+## seen notification
+#
+170 <?rnick/?> (<?rhost/?>) Ви търси в <?rchan/?> Преди <?rwhen/?> (<?rtime/?>).
+171 Търсиха ви <?requests/?> човека:
+172 Последния е бил <?rnick/?> (<?rhost/?>) в <?rchan/?> Преди <?rwhen/?> (<?rtime/?>).
+
+#
+## seen stats
+#
+180 В Настоящия момент аз обслужвам <?totalnicks/?> ника, използвайки <?totalbytes/?> байта на компютъра .

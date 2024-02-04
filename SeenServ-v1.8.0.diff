@@ -1,0 +1,1057 @@
+diff -rduN hybserv-1.8.0/include/chanserv.h hybserv-1.8.0+SeenServ/include/chanserv.h
+--- hybserv-1.8.0/include/chanserv.h	2001-09-12 17:10:10.000000000 -0200
++++ hybserv-1.8.0+SeenServ/include/chanserv.h	2002-09-26 12:22:51.000000000 -0200
+@@ -42,6 +42,8 @@
+ #define CS_GUARD        0x00000400 /* have ChanServ join the channel */
+ #define CS_SPLITOPS     0x00000800 /* let people keep ops from splits */
+ #define CS_VERBOSE      0x00001000 /* notify chanops for access changes */
++#define CS_PRIVSEEN     0x00002000 /* Private ChanSeen ON */
++#define CS_SEENSERV     0x00004000 /* SeenGuard on */
+ 
+ 
+ /* access_lvl[] indices */
+@@ -159,6 +161,7 @@
+ void cs_CheckTopic(char *who, char *channel);
+ int cs_ShouldBeOnChan(struct ChanInfo *cptr);
+ void cs_RejoinChannels();
++void es_RejoinChannels();
+ void PromoteSuccessor(struct ChanInfo *cptr);
+ void ExpireChannels(time_t unixtime);
+ 
+diff -rduN hybserv-1.8.0/include/match.h hybserv-1.8.0+SeenServ/include/match.h
+--- hybserv-1.8.0/include/match.h	2001-06-03 18:02:06.000000000 -0200
++++ hybserv-1.8.0+SeenServ/include/match.h	2002-09-26 12:22:51.000000000 -0200
+@@ -14,6 +14,7 @@
+ /* match.c prototypes */
+ 
+ int match(const char *, const char *);
++int casematch(const char *, const char *);
+ int irccmp(const char *, const char *);
+ int ircncmp(const char *, const char *, int);
+ 
+diff -rduN hybserv-1.8.0/include/seenserv.h hybserv-1.8.0+SeenServ/include/seenserv.h
+--- hybserv-1.8.0/include/seenserv.h	2001-03-02 23:48:53.000000000 -0200
++++ hybserv-1.8.0+SeenServ/include/seenserv.h	2002-09-26 12:22:51.000000000 -0200
+@@ -20,6 +20,10 @@
+   char nick[NICKLEN + 1];
+   char *userhost, *msg;
+   time_t time;
++  time_t since;
++  int os;
++  int ns;
++  char newnick[NICKLEN + 1];
+ };
+ 
+ typedef struct Seen aSeen;
+@@ -28,7 +32,10 @@
+ extern aSeen *seenp, *seenb; 
+ 
+ void es_process(char *nick, char *command);
+-void es_add(char *nick, char *user, char *host, char *msg, time_t time, int type);
++void es_add(char *nick, char *user, char *host, char *msg, time_t time, time_t since, int os, int ns, char *newnick, int type);
++void es_sjoin(struct ChanInfo *, struct Channel *);
++void es_part(struct Channel *chptr);
++void es_RejoinChannels();
+ 
+ #endif /* SEENSERVICES */
+ 
+diff -rduN hybserv-1.8.0/source/chanserv.c hybserv-1.8.0+SeenServ/source/chanserv.c
+--- hybserv-1.8.0/source/chanserv.c	2001-09-20 16:42:35.000000000 -0200
++++ hybserv-1.8.0+SeenServ/source/chanserv.c	2002-09-26 12:22:51.000000000 -0200
+@@ -39,6 +39,7 @@
+ #include "mystring.h"
+ #include "nickserv.h"
+ #include "operserv.h"
++#include "seenserv.h"
+ #include "server.h"
+ #include "settings.h"
+ #include "sock.h"
+@@ -124,6 +125,7 @@
+ static void c_set_restricted(struct Luser *, struct NickInfo *, int, char **);
+ static void c_set_forget(struct Luser *, struct NickInfo *, int, char **);
+ static void c_set_guard(struct Luser *, struct NickInfo *, int, char **);
++static void c_set_seenserv(struct Luser *, struct NickInfo *, int, char **);
+ static void c_set_password(struct Luser *, struct NickInfo *, int, char **);
+ static void c_set_founder(struct Luser *, struct NickInfo *, int, char **);
+ static void c_set_successor(struct Luser *, struct NickInfo *, int, char **);
+@@ -235,6 +237,7 @@
+   { "RESTRICTED", c_set_restricted, LVL_NONE },
+   { "FORGET", c_set_forget, LVL_NONE },
+   { "GUARD", c_set_guard, LVL_NONE },
++  { "SEENSERV", c_set_seenserv, LVL_NONE },
+   { "PASSWORD", c_set_password, LVL_NONE },
+   { "NEWPASS", c_set_password, LVL_NONE },
+   { "FOUNDER", c_set_founder, LVL_NONE },
+@@ -1824,9 +1827,16 @@
+    * mlock modes everytime someone joins.
+    */
+   if (newchan)
+-    cs_join(cptr);
++  {
++	if (cptr->flags & CS_SEENSERV)
++	  es_sjoin(cptr, chptr);
++
++	cs_join(cptr);
++  }
+ 
+ #else
++  if (cptr->flags & CS_SEENSERV)
++      es_sjoin(cptr);
+ 
+   cs_join(cptr);
+ 
+@@ -1983,6 +1993,30 @@
+   }
+ } /* cs_RejoinChannels() */
+ 
++void
++es_RejoinChannels()
++{
++  int ii;
++  struct ChanInfo *cptr;
++
++  for (ii = 0; ii < CHANLIST_MAX; ii++)
++  {
++    for (cptr = chanlist[ii]; cptr; cptr = cptr->next)
++    {
++      if (cptr->flags & CS_FORGET)
++        continue;
++      if (cptr->flags & CS_FORBID)
++        continue;
++      if (!(cptr->flags & CS_SEENSERV))
++        continue;
++      if (!FindChannel(cptr->name))
++        continue;
++
++      es_sjoin(cptr, FindChannel(cptr->name));
++    }
++  }
++} /* es_RejoinChannels() */
++
+ /*
+ PromoteSuccessor()
+  Promote the successor on cptr to founder
+@@ -2093,6 +2127,7 @@
+ 
+         temp = tempc->next;
+         cs_part(tempc->chptr);
++		es_part(tempc->chptr);
+         tempc = temp;
+       }
+       else
+@@ -2344,6 +2379,10 @@
+ 
+   hashv = CSHashChan(chanptr->name);
+ 
++  es_part(FindChannel(chanptr->name));
++  chanptr->flags &= ~CS_SEENSERV;
++  chanptr->flags &= ~CS_PRIVSEEN;
++	  
+ #ifdef MEMOSERVICES
+   /* check if the chan had any memos - if so delete them */
+   if ((mi = FindMemoList(chanptr->name)))
+@@ -4936,6 +4975,10 @@
+     if (cs_ShouldBeOnChan(cptr))
+       cs_part(FindChannel(cptr->name)); /* leave the channel */
+ 
++    es_part(FindChannel(cptr->name));
++    cptr->flags &= ~CS_SEENSERV;
++    cptr->flags &= ~CS_PRIVSEEN;
++
+     return;
+   }
+ 
+@@ -5020,6 +5063,111 @@
+ } /* c_set_guard() */
+ 
+ static void
++c_set_seenserv(struct Luser *lptr, struct NickInfo *nptr, int ac, char **av)
++
++{
++  struct ChanInfo *cptr;
++  struct Channel *chptr;
++
++  if (!(cptr = FindChan(av[1])) || !(chptr = FindChannel(av[1])))
++    return;
++
++  RecordCommand("%s: %s!%s@%s SET [%s] SEENSERV %s",
++    n_ChanServ,
++    lptr->nick,
++    lptr->username,
++    lptr->hostname,
++    cptr->name,
++    (ac < 4) ? "" : StrToupper(av[3]));
++
++  if (cptr->flags & CS_FORGET || cptr->flags & CS_FORBID) {
++    notice(n_ChanServ, lptr->nick,
++        "The channel %s is %s, you can't have SeenServ!",
++        cptr->name, (cptr->flags & CS_FORGET) ? "forgotten" : "forbidden");
++    return;
++  }
++
++  if (ac < 4)
++  {
++    notice(n_ChanServ, lptr->nick,
++      "Syntax: \002SET <channel> SEENSERV {ON|OFF|PUBLIC|PRIVATE}\002");
++    notice(n_ChanServ, lptr->nick,
++      ERR_MORE_INFO,
++      n_ChanServ,
++      "SET SEENSERV");
++    return;
++  }
++
++  if (!irccmp(av[3], "ON"))
++  {
++    if ((chptr->numusers < 5) && !IsValidAdmin(lptr))
++    {
++  	  notice(n_ChanServ, lptr->nick,
++      	  "There are less than 5 users in channel %s. SeenServ will not join",
++      	  cptr->name);
++  	  return;
++    }
++
++    cptr->flags |= CS_SEENSERV;
++	es_sjoin(cptr, chptr);
++
++    notice(n_ChanServ, lptr->nick,
++      "Toggled ChanSeen for channel %s [\002ON\002]",
++      cptr->name);
++    return;
++  }
++
++  if (!irccmp(av[3], "OFF"))
++  {
++    cptr->flags &= ~CS_SEENSERV;
++	es_part(chptr);
++
++    notice(n_ChanServ, lptr->nick,
++      "Toggled ChanSeen for channel %s [\002OFF\002]",
++      cptr->name);
++    return;
++  }
++
++  if (!irccmp(av[3], "PUBLIC"))
++  {
++    if (cptr->flags & CS_SEENSERV) {
++      cptr->flags &= ~CS_PRIVSEEN;
++	  
++      notice(n_ChanServ, lptr->nick,
++        "Toggled ChanSeen for channel %s [\002PUBLIC\002]",
++        cptr->name);
++    } else
++      notice(n_ChanServ, lptr->nick,
++        "You can't set PUBLIC for channel %s, because SeenServ is not there!",
++        cptr->name);
++    return;
++  }
++
++  if (!irccmp(av[3], "PRIVATE"))
++  {
++    if (cptr->flags & CS_SEENSERV) {
++      cptr->flags |= CS_PRIVSEEN;
++	  
++      notice(n_ChanServ, lptr->nick,
++        "Toggled ChanSeen for channel %s [\002PRIVATE\002]",
++        cptr->name);
++    } else
++      notice(n_ChanServ, lptr->nick,
++        "You can't set PRIVATE for channel %s, because SeenServ is not there!",
++        cptr->name);
++    return;
++  }
++
++  /* user gave an unknown param */
++  notice(n_ChanServ, lptr->nick,
++    "Syntax: \002SET <channel> SEENSERV {ON|OFF|PUBLIC|PRIVATE}\002");
++  notice(n_ChanServ, lptr->nick,
++    ERR_MORE_INFO,
++    n_ChanServ,
++    "SET SEENSERV");
++} /* c_set_seenserv() */
++
++static void
+ c_set_password(struct Luser *lptr, struct NickInfo *nptr, int ac, char **av)
+ 
+ {
+diff -rduN hybserv-1.8.0/source/data.c hybserv-1.8.0+SeenServ/source/data.c
+--- hybserv-1.8.0/source/data.c	2001-08-11 15:59:46.000000000 -0200
++++ hybserv-1.8.0+SeenServ/source/data.c	2002-09-26 12:22:51.000000000 -0200
+@@ -204,6 +204,14 @@
+             if (cptr && !IsChannelMember(cptr, Me.csptr))
+               cs_join(ctemp);
+           }
++
++          if (!(ctemp->flags & CS_FORGET) && !(ctemp->flags & CS_FORBID) &&
++			  (ctemp->flags & CS_SEENSERV))
++          {
++            cptr = FindChannel(ctemp->name);
++            if (cptr && !IsChannelMember(cptr, Me.esptr))
++              es_sjoin(ctemp, cptr);
++          }
+         }
+       }
+     }
+@@ -1265,10 +1273,24 @@
+     if (seen) 
+     switch(seen->type) {
+       case 1:
+-         fprintf(fp, "->QUIT %s %s %ld :%s\n", seen->nick, seen->userhost, (long) seen->time, seen->msg);
++		 fprintf(fp, "->QUIT %s %s %ld %ld %d %d :%s\n",
++				 seen->nick,
++				 seen->userhost,
++				 (long) seen->time,
++				 (long) seen->since ? (long) seen->since : (long) seen->time,
++				 seen->os ? seen->os : 0,
++				 seen->ns ? seen->ns : 0,
++				 seen->msg);
+          break;
+       case 2:
+-         fprintf(fp, "->NICK %s %s %ld\n", seen->nick, seen->userhost, (long) seen->time);
++		 fprintf(fp, "->NICK %s %s %ld %ld %d %d :%s\n",
++				 seen->nick,
++				 seen->userhost,
++				 (long) seen->time,
++				 (long) seen->since ? (long) seen->since : (long) seen->time,
++				 seen->os ? seen->os : 0,
++				 seen->ns ? seen->ns : 0,
++				 seen->newnick ? seen->newnick : ":NULL:");
+          break;
+       default:
+          break;
+diff -rduN hybserv-1.8.0/source/match.c hybserv-1.8.0+SeenServ/source/match.c
+--- hybserv-1.8.0/source/match.c	2001-08-16 06:29:38.000000000 -0200
++++ hybserv-1.8.0+SeenServ/source/match.c	2002-09-26 12:22:51.000000000 -0200
+@@ -153,6 +153,92 @@
+   return 0;
+ }
+ 
++int casematch(const char *mask, const char *name)
++{
++  const unsigned char* m = (const unsigned char*)  mask;
++  const unsigned char* n = (const unsigned char*)  name;
++  const unsigned char* ma = (const unsigned char*) mask;
++  const unsigned char* na = (const unsigned char*) name;
++  int   wild  = 0;
++  int   calls = 0;
++  int   quote = 0;
++  assert(0 != mask);
++  assert(0 != name);
++  if (!mask || !name)
++    return 0;
++  while (calls++ < MATCH_MAX_CALLS) {
++    if (quote)
++      quote++;
++    if (quote == 3)
++      quote = 0;
++    if (*m == '\\' && !quote)
++      {
++       m++;
++       quote = 1;
++       continue;
++      }
++    if (!quote && *m == '*') {
++      /*
++       * XXX - shouldn't need to spin here, the mask should have been
++       * collapsed before match is called
++       */
++      while (*m == '*')
++        m++;
++      if (*m == '\\')
++        {
++          m++;
++          /* This means it is an invalid mask -A1kmm. */
++          if (!*m)
++            return 0;
++          quote = 2;
++        }
++      wild = 1;
++      ma = m;
++      na = n;
++    }
++
++    if (!*m) {
++      if (!*n)
++        return 1;
++      if (quote)
++        return 0;
++      for (m--; (m > (const unsigned char*) mask) && (*m == '?'); m--)
++        ;
++      if (*m == '*' && (m > (const unsigned char*) mask))
++        return 1;
++      if (!wild)
++        return 0;
++      m = ma;
++      n = ++na;
++    }
++    else if (!*n) {
++      /*
++       * XXX - shouldn't need to spin here, the mask should have been
++       * collapsed before match is called
++       */
++      if (quote)
++        return 0;
++      while (*m == '*')
++        m++;
++      return (*m == 0);
++    }
++    if (*m != *n && !(!quote && *m == '?')) {
++      if (!wild)
++        return 0;
++      m = ma;
++      n = ++na;
++    }
++    else {
++      if (*m)
++        m++;
++      if (*n)
++        n++;
++    }
++  }
++  return 0;
++}
++
++
+ /*
+  * Rewritten to work properly with escaping, and hopefully to run faster
+  * in most cases... -A1kmm.
+diff -rduN hybserv-1.8.0/source/seenserv.c hybserv-1.8.0+SeenServ/source/seenserv.c
+--- hybserv-1.8.0/source/seenserv.c	2001-08-11 15:59:47.000000000 -0200
++++ hybserv-1.8.0+SeenServ/source/seenserv.c	2002-09-26 12:23:13.000000000 -0200
+@@ -36,6 +36,7 @@
+ #include "misc.h"
+ #include "timestr.h"
+ #include "mystring.h"
++#include "nickserv.h"
+ #include "settings.h"
+ #include "sock.h"
+ #include "log.h"
+@@ -53,6 +54,8 @@
+ static void es_unseen(struct Luser *, int, char **);
+ static void es_seenstat(struct Luser *, int, char **);
+ static void FreeSeen();
++void es_sjoin(struct ChanInfo *, struct Channel *);
++void es_part(struct Channel *);
+ 
+ static struct Command seencmds[] =
+ {
+@@ -195,9 +198,13 @@
+                 memset(seen, 0, sizeof(aSeen));
+                 strncpy(seen->nick, av[1], NICKLEN);
+                 seen->userhost = MyStrdup(av[2]);
+-                seen->msg = (type == 1) ? MyStrdup(av[4] + 1) : NULL;
++                seen->msg = (type == 1) ? MyStrdup(av[7] + 1) : NULL;
+                 seen->time = atol(av[3]);
+                 seen->type = type;
++		        seen->since = atol(av[4]) ? atol(av[4]) : atol(av[3]);
++		        seen->os = atol(av[5]) ? atol(av[5]) : 0;
++		        seen->ns = atol(av[6]) ? atol(av[6]) : 0;
++		        strncpy(seen->newnick, (type == 2) ? (av[7] + 1) : ":NULL:", NICKLEN);
+                 seen->prev = seenp;
+                 seen->next = NULL;
+                 if (seenp)
+@@ -218,7 +225,7 @@
+ } /* es_loaddata */
+ 
+ void es_add(char *nick, char *user, char *host, char *msg, time_t time,
+-            int type)
++			time_t since, int os, int ns, char *newnick, int type)
+ {
+     int ac;
+     char userhost[USERLEN + HOSTLEN + 2], **av, *mymsg;
+@@ -263,6 +270,10 @@
+     seen->msg = (type == 1) ? MyStrdup(msg) : NULL;
+     seen->time = time;
+     seen->type = type;
++    seen->since = since;
++    seen->os = os;
++    seen->ns = ns;
++    strncpy(seen->newnick, (type == 2) ? newnick : ":NULL:", NICKLEN);
+     seen->prev = seenp;
+     seen->next = NULL;
+     if (seenp)
+@@ -294,10 +305,13 @@
+  */
+ static void es_seen(struct Luser *lptr, int ac, char **av)
+ {
+-    int i, count;
+-    aSeen *seen, *first = NULL, *saved = NULL, *sorted[5];
++    int i, count, users = 1, dusers = 0, casecmp = 0, identified = 0,
++		osid = 0, large = 0, loop = 0;
++    aSeen *seen, *first = NULL, *saved = NULL, *sorted[100];
+     char nuhost[NICKLEN + USERLEN + HOSTLEN + 3], sendstr[256];
+     time_t mytime, last;
++	struct NickInfo *nptr;
++	struct Luser *tempuser, *array[100]; /* thanks kre ;) */
+ 
+     if (ac < 2)
+     {
+@@ -308,89 +322,248 @@
+         return ;
+     }
+ 
+-    if (strchr(av[1], '*') || strchr(av[1], '?'))
++	if (strchr(av[1], '!') && !strchr(av[1], '@'))
++	  strcat(av[1], "@*");
++  	else if (!strchr(av[1], '!') && strchr(av[1], '@'))
++	{
++	  char tmp[100];
++	  ircsprintf(tmp, "*!%s", av[1]);
++	  av[1] = tmp;
++	} else if (!strchr(av[1], '!') && !strchr(av[1], '@'))
++	  strcat(av[1], "!*@*");
++
++	if (av[2])
++	{
++  	  for (i = 0; av[2][i]; i++)
++	  {
++		if (av[2][i] == 'd' && av[2][i++] && IsDigit(av[2][i]))
++		{
++		  users = av[2][i] - 48;
++
++		  if (av[2][i++] && IsDigit(av[2][i]))
++		  {
++			users = users * 10 + av[2][i] - 48;
++
++			if (av[2][i++] && IsDigit(av[2][i]))
++			  users = users * 10 + av[2][i] - 48;
++		  }
++		}
++
++		if (av[2][i] == 's' && av[2][i++] && IsDigit(av[2][i]))
++		{
++	  	  dusers = av[2][i] - 48;
++
++		  if (av[2][i++] && IsDigit(av[2][i]))
++		  {
++			dusers = dusers * 10 + av[2][i] - 48;
++
++			if (av[2][i++] && IsDigit(av[2][i]))
++		  	  dusers = dusers * 10 + av[2][i] - 48;
++	  	  }
++		}
++
++  		if (av[2][i] == '+')
++      	  identified = 1;
++      	else if (av[2][i] == '-')
++      	  identified = 0;
++    	else if (av[2][i] == 'c')
++  	  	  casecmp = 1;
++  		else if (av[2][i] == '@')
++      	  osid = 1;
++    	else if (av[2][i] == '=')
++      	  osid = 0;
++    	else if (av[2][i] == 'f')
++  	  	  large = 1;
++  	  }
++
++	  if ((dusers > 5 || users > 5) && !IsOperator(lptr))
++	  {
++    	notice(n_SeenServ, lptr->nick,
++  	  	  "You can't specify more than 5 results!");
++  		return;
++  	  }
++
++  	  if ((dusers > 50 || users > 50) && IsOperator(lptr)) 
++  	  {
++		notice(n_SeenServ, lptr->nick,
++  	  	  "You can't specify more than 50 results!");
++    	return;
++  	  }
++  	}
++		
++    for (tempuser = ClientList; tempuser; tempuser = tempuser->next)
+     {
+-        count = 0;
+-        for (seen = seenp; seen; seen = seen->prev)
+-        {
+-            memset(nuhost, 0, sizeof(nuhost));
+-            strncpy(nuhost, seen->nick, NICKLEN);
+-            strcat(nuhost, "!");
+-            strncat(nuhost, seen->userhost, USERLEN + HOSTLEN + 1);
+-            if (match(av[1], nuhost))
+-            {
+-                seen->seen = saved;
+-                saved = seen;
+-                if (++count > MAXWILDSEEN)
+-                    break;
+-            }
+-        }
+-        first = saved;
++      if (FindService(tempuser))
++  		continue;
+ 
+-        if (count > MAXWILDSEEN)
+-        {
+-            notice(n_SeenServ, lptr->nick,
+-                   "I found more than %d matches to your query; "
+-                   "please refine it to see any output", MAXWILDSEEN);
+-            return ;
++      if (identified) {
++        if (!(nptr = FindNick(tempuser->nick)))
++          continue;
++
++    	if (!(nptr->flags & NS_IDENTIFIED))
++	  	  continue;
++  	  }
++
++      if (osid) {
++  		if (!(tempuser->flags & L_OSREGISTERED))
++          continue;
++      }
++
++	  bzero(nuhost, sizeof(nuhost));
++      strncpy(nuhost, tempuser->nick, NICKLEN); strcat(nuhost, "!");
++      strncat(nuhost, tempuser->username, USERLEN); strcat(nuhost, "@");
++      strncat(nuhost, tempuser->hostname, HOSTLEN);
++
++      if (!(casecmp ? casematch(av[1], nuhost) : match (av[1], nuhost)))
++        continue;
++
++      array[loop] = tempuser;
++
++      if (loop++ > 100) break;
++    }
++
++    count = 0;
++    for (seen = seenp; seen; seen = seen->prev)
++    {
++      memset(nuhost, 0, sizeof(nuhost));
++      strncpy(nuhost, seen->nick, NICKLEN);
++      strcat(nuhost, "!");
++      strncat(nuhost, seen->userhost, USERLEN + HOSTLEN + 1);
++      if (casecmp ? casematch(av[1], nuhost) : match (av[1], nuhost))
++      {
++        if (identified) {
++          if (!(nptr = FindNick(seen->nick)))
++            continue;
++	  
++	      if (!seen->ns)
++		    continue;
+         }
+-        else
+-            if (count == 0)
+-            {
+-                notice(n_SeenServ, lptr->nick,
+-                       "I found no matching seen records to your query");
+-                return ;
+-            }
+-            else
+-            {
+-                mytime = current_ts + 1;
+-                for (i = 0; (i < 5) && (i < count); i++)
+-                {
+-                    saved = first;
+-                    last = 0;
+-                    for (; saved; saved = saved->seen)
+-                    {
+-                        if ((saved->time < mytime) && (saved->time > last))
+-                        {
+-                            sorted[i] = saved;
+-                            last = saved->time;
+-                        }
+-                    }
+-                    mytime = sorted[i]->time;
+-                }
+-            }
+ 
+-        ircsprintf(sendstr, "I found %d match(es), ", count);
+-        if (count > 5)
+-            strcat(sendstr, "here are the 5 most recent, ");
+-        strcat(sendstr, "sorted:");
+-        count = i;
+-        for (i = 0; i < count; i++)
+-        {
+-            strcat(sendstr, " ");
+-            strcat(sendstr, sorted[i]->nick);
++        if (osid) {
++          if (!seen->os)
++            continue;
+         }
+-        strcat(sendstr, ". ");
+-        if (sorted[0]->type == 1)
++
++        seen->seen = saved;
++        saved = seen;
++        if (++count > MAXWILDSEEN)
++      	  break;
++  	  }
++    }
++    first = saved;
++
++    if ((count + loop) > MAXWILDSEEN)
++    {
++      notice(n_SeenServ, lptr->nick,
++        "I found more than %d matches to your query; "
++        "please refine it to see any output", MAXWILDSEEN);
++      return;
++    }
++    else if ((count + loop) == 0)
++    {
++      notice(n_SeenServ, lptr->nick,
++        "I found no matching seen records to your query");
++      return;
++    }
++    else
++    {
++      mytime = current_ts + 1;
++      for (i = 0; (i < (users + dusers) > 5 ? (users + dusers) : 5) && (i < count); i++)
++      {
++        saved = first;
++        last = 0;
++        for (; saved; saved = saved->seen)
+         {
+-            notice(n_SeenServ, lptr->nick,
+-                   "%s %s (%s) was last seen %s ago, quiting: %s",
+-                   sendstr, sorted[0]->nick, sorted[0]->userhost,
+-                   timeago(sorted[0]->time, 0), sorted[0]->msg);
++          if ((saved->time < mytime) && (saved->time > last))
++          {
++            sorted[i] = saved;
++            last = saved->time;
++          }
+         }
+-        else
+-            if (sorted[0]->type == 2)
+-            {
+-                notice(n_SeenServ, lptr->nick,
+-                       "%s %s (%s) was last seen %s ago, changing nicks",
+-                       sendstr, sorted[0]->nick, sorted[0]->userhost,
+-                       timeago(sorted[0]->time, 0));
+-            }
++        mytime = sorted[i]->time;
++      }
+     }
+-    else
++
++    ircsprintf(sendstr, "I found %d match(es), ", count + loop);
++
++    if ((count + loop) > 5)
++      strcat(sendstr, "here are the 5 most recent, ");
++
++    strcat(sendstr, "sorted:");
++    count = i;
++
++	if (loop)
+     {
+-        es_seennick(lptr, ac, av);
++	  for (i = 0; (i < loop) && (i < 5); i++) {
++	    strcat(sendstr, " ");
++    	strcat(sendstr, array[i]->nick);
++	  }
++
++  	  if (loop < 5)
++      {
++	    for (i = 0; (i < count) && (i < (5 - loop)); i++) {
++		  strcat(sendstr, " ");
++          strcat(sendstr, sorted[i]->nick);
++	    }
++  	  }
++    } else {
++	  for (i = 0;(i < count) && (i < 5); i++) {
++  		strcat(sendstr, " ");
++		strcat(sendstr, sorted[i]->nick);
++      }
++	}
++
++	notice(n_SeenServ, lptr->nick, "%s.", sendstr);
++
++    if (loop)
++	{
++  	  for (i = 0; (i < loop) && (i < (dusers + users)); i++)
++  	  {
++  		if (large) {
++      	  if ((nptr = FindNick(array[i]->nick)) &&
++			  (nptr->flags & NS_IDENTIFIED))
++	        identified = 1;
++  		  else
++  	  		identified = 0;
++
++          notice(n_SeenServ, lptr->nick, "%s is currently online, signed %s ago, (NS: %s, OS: %s)",
++            array[i]->nick, timeago(array[i]->since, 0),
++            identified ? "YES" : "NO",
++	        (array[i]->flags & L_OSREGISTERED) ? "YES" : "NO");
++        } else {
++          notice(n_SeenServ, lptr->nick, "%s is currently online.",
++            array[i]->nick);
++        }
++	  }
+     }
++
++    for (i = (dusers); (i < (users + dusers - loop)) && (i < count); i++) 
++	{
++      if (sorted[i]->type == 1) {
++	    if (large)
++          notice(n_SeenServ, lptr->nick, "%s (%s) was last seen %s ago, signed %s ago, (NS: %s, OS: %s), quiting: %s",
++            sorted[i]->nick, sorted[i]->userhost,
++            timeago(sorted[i]->time, 0), timeago(sorted[i]->since, 0),
++		    sorted[i]->ns ? "YES" : "NO", sorted[i]->os ? "YES" : "NO",
++			sorted[i]->msg);
++        else
++      	  notice(n_SeenServ, lptr->nick, "%s (%s) was last seen %s ago, quiting: %s",
++            sorted[i]->nick, sorted[i]->userhost,
++    	    timeago(sorted[i]->time, 0), sorted[i]->msg);
++  	  } else if (sorted[i]->type == 2) {
++  		if (large)
++      	  notice(n_SeenServ, lptr->nick, "%s (%s) was last seen %s ago, signed %s ago, (NS: %s, OS: %s), changed nick to: %s",
++            sorted[i]->nick, sorted[i]->userhost,
++		    timeago(sorted[i]->time, 0), timeago(sorted[i]->since, 0),
++			sorted[i]->ns ? "YES" : "NO", sorted[i]->os ? "YES" : "NO",
++		    sorted[i]->newnick);
++        else
++          notice(n_SeenServ, lptr->nick, "%s (%s) was last seen %s ago, changed nick to: %s",
++		    sorted[i]->nick, sorted[i]->userhost,
++			timeago(sorted[i]->time, 0),
++			sorted[i]->newnick);
++      }
++	}
+ } /* es_seen */
+ 
+ /*
+@@ -444,8 +617,8 @@
+         }
+         else if (recent->type == 2)
+         {
+-            notice(n_SeenServ, lptr->nick, "I last saw %s (%s) %s ago, changing nicks", recent->nick,
+-                   recent->userhost, timeago(recent->time, 0));
++            notice(n_SeenServ, lptr->nick, "I last saw %s (%s) %s ago, changed nick to: %s", recent->nick,
++                   recent->userhost, timeago(recent->time, 0), recent->newnick);
+         }
+     }
+     else
+@@ -572,4 +745,35 @@
+ 
+ } /* es_seenstat() */
+ 
++/*
++ * Join a specific channel
++ */
++void es_sjoin(struct ChanInfo *cptr, struct Channel *chptr)
++{
++  char sendstr[MAXLINE], **pp;
++
++  if (!cptr || !chptr)
++    return;
++
++  ircsprintf(sendstr, ":%s SJOIN %ld %s + :+%s\n", Me.name,
++         (long) chptr->since, chptr->name, n_SeenServ);
++  toserv(sendstr);
++
++  SplitBuf(sendstr, &pp);
++  AddChannel(pp, 0, (char **) NULL);
++  MyFree(pp);
++} /* es_sjoin */
++
++/*
++ * Parts a specific channel
++ */
++void es_part(struct Channel *chptr)
++{
++  if (!chptr)
++    return;
++
++  toserv(":%s PART %s\n", n_SeenServ, chptr->name);
++  RemoveFromChannel(chptr, Me.esptr);
++} /* es_part */
++
+ #endif /* SEENSERVICES */
+diff -rduN hybserv-1.8.0/source/server.c hybserv-1.8.0+SeenServ/source/server.c
+--- hybserv-1.8.0/source/server.c	2001-10-09 18:46:21.000000000 -0200
++++ hybserv-1.8.0+SeenServ/source/server.c	2002-09-26 12:22:51.000000000 -0200
+@@ -660,6 +660,7 @@
+ 
+ #ifdef SEENSERVICES
+   char oldnick[NICKLEN + 1];
++  int id = 0;
+ #endif
+ 
+   if (ac == 4)
+@@ -722,6 +723,7 @@
+        */
+       if (nptr->flags & NS_IDENTIFIED)
+       {
++		id = 1;
+         if (newptr && IsLinked(nptr, newptr))
+           newptr->flags |= NS_IDENTIFIED;
+       }
+@@ -730,6 +732,9 @@
+       /*
+        * Un-Identify the old nickname if it is registered
+        */
++	  if (nptr->flags & NS_IDENTIFIED)
++	    id = 1;
++
+       nptr->flags &= ~NS_IDENTIFIED;
+     } /* if (nptr) */
+   #endif /* NICKSERVICES */
+@@ -803,7 +808,9 @@
+   #endif
+ 
+   #ifdef SEENSERVICES
+-    es_add(oldnick, lptr->username, lptr->hostname, NULL, current_ts, 2);
++    es_add(oldnick, lptr->username, lptr->hostname, NULL, current_ts,
++	       lptr->since, (lptr->flags & L_OSREGISTERED) ? 1 : 0, id,
++		   MyStrdup(newnick), 2);
+   #endif /* SEENSERVICES */
+ 
+ #ifdef ADVFLOOD
+@@ -1136,6 +1143,114 @@
+     } /* if (!IsValidAdmin(lptr)) */
+   } /* if (FloodProtection && GetService(av[2])) */
+ 
++  while (*command == ' ') /* Let's remove the leading \s if there are any */
++    command++;
++
++  if (!serviceptr && !ircncmp(command, "SEEN", 4)) /* It's to the channel
++                                                    * and it is seen (case) */
++  {
++    char **splitted;
++	int nsplitted;
++    struct Luser *tempuser, *array[0];
++    struct Channel *chptr;
++    struct ChanInfo *cptr;
++
++    nsplitted = SplitBuf(command, &splitted); /* split it to peaces */
++    chptr = FindChannel(av[2]); /* get chan's info */
++    cptr = FindChan(av[2]);
++
++    if (!chptr || !cptr)
++      return;
++
++    if (IsChannelMember(chptr, Me.esptr)) /* Is SeenServ on it? */
++    {
++      aSeen *seen, *saved = NULL;
++      struct Luser *aptr;
++
++      if (nsplitted < 2)
++      {
++        if (cptr->flags & CS_PRIVSEEN)
++          toserv(":%s PRIVMSG %s :Type: /msg SeenServ help seen, for help on seen\n",
++            n_SeenServ, lptr->nick);
++        else
++          toserv(":%s PRIVMSG %s :Type: /msg SeenServ help seen, for help on seen\n",
++            n_SeenServ, av[2]);
++        return;
++      }
++
++      if ((aptr = FindClient(splitted[1])))
++      {
++        if (cptr->flags & CS_PRIVSEEN)
++          toserv(":%s PRIVMSG %s :%s is currently online.\n",
++            n_SeenServ, lptr->nick, splitted[1]);
++        else
++          toserv(":%s PRIVMSG %s :%s is currently online.\n",
++            n_SeenServ, av[2], splitted[1]);
++        return;
++      }
++
++      for (tempuser = ClientList; tempuser; tempuser = tempuser->next)
++      {
++        if (match(splitted[1], tempuser->nick)) {
++          array[0] = tempuser;
++          break;
++        }
++      }
++
++      if (!array[0]) {
++        for (seen = seenp; seen; seen = seen->prev) {
++          if (match(splitted[1], seen->nick)) {
++            seen->seen = saved;
++            saved = seen;
++			break;
++          }
++        }
++      } else {
++        if (cptr->flags & CS_PRIVSEEN)
++          toserv(":%s PRIVMSG %s :%s is currently online.\n",
++            n_SeenServ, lptr->nick, array[0]->nick);
++        else
++          toserv(":%s PRIVMSG %s :%s is currently online.\n",
++            n_SeenServ, av[2], array[0]->nick);
++        return;
++      }
++
++      if (saved) {
++
++        if (saved->type == 1) {
++          if (cptr->flags & CS_PRIVSEEN)
++            toserv(":%s PRIVMSG %s :%s (%s) was last seen %s ago, quiting: %s\n",
++			  n_SeenServ, lptr->nick, saved->nick, saved->userhost, 
++			  timeago(saved->time, 0), saved->msg);
++          else
++            toserv(":%s PRIVMSG %s :%s (%s) was last seen %s ago, quiting: %s\n",
++			  n_SeenServ, lptr->nick, saved->nick, saved->userhost, 
++			  timeago(saved->time, 0), saved->msg);
++		  return;
++        } else if (saved->type == 2) {
++          if (cptr->flags & CS_PRIVSEEN)
++            toserv(":%s PRIVMSG %s :%s (%s) was last seen %s ago, changed nick to: %s\n",
++			  n_SeenServ, lptr->nick, saved->nick, saved->userhost,
++			  timeago(saved->time, 0), saved->newnick);
++          else
++            toserv(":%s PRIVMSG %s :%s (%s) was last seen %s ago, changed nick to: %s\n",
++			  n_SeenServ, lptr->nick, saved->nick, saved->userhost,
++			  timeago(saved->time, 0), saved->newnick);
++		  return;
++        }
++      } else {
++        if (cptr->flags & CS_PRIVSEEN)
++          toserv(":%s PRIVMSG %s :I haven't seen %s recently\n",
++            n_SeenServ, lptr->nick, splitted[1]);
++        else
++          toserv(":%s PRIVMSG %s :I haven't seen %s recently\n",
++            n_SeenServ, av[2], splitted[1]);
++        return;
++      }
++    }
++    MyFree(splitted);
++  }
++
+   if (!serviceptr && (*command == '\001'))
+   {
+     struct Channel *chptr;
+@@ -1322,8 +1437,9 @@
+ #endif /* NICKSERVICES */
+ 
+ #ifdef SEENSERVICES
+-  es_add(lptr->nick, lptr->username, lptr->hostname, av[2] + 1,
+-      current_ts, 1);
++  es_add(lptr->nick, lptr->username, lptr->hostname, av[2] + 1, current_ts,
++         lptr->since, (lptr->flags & L_OSREGISTERED) ? 1 : 0,
++		 (((nptr = FindNick(lptr->nick))) && (nptr->flags & NS_IDENTIFIED)) ? 1 : 0, NULL, 1);
+ #endif /* SEENSERVICES */
+ 
+ #ifdef ADVFLOOD
+@@ -1490,6 +1606,9 @@
+     else if (!irccmp(av[2], n_ChanServ))
+       cs_RejoinChannels();
+ 
++    else if (!irccmp(av[2], n_SeenServ))
++      es_RejoinChannels();
++
+   #endif
+ 
+   }
+@@ -1699,6 +1818,10 @@
+     if (cptr && (cptr->numusers <= 1))
+       cs_join(FindChan(chan));
+ 
++    if (cptr && (cptr->numusers <= 1))
++      if (FindChan(chan)->flags & CS_SEENSERV)
++        es_sjoin(FindChan(chan), cptr);
++				  
+   #else
+ 
+     if (cptr)
+@@ -1706,6 +1829,12 @@
+         if (!(ci->flags & CS_FORGET))
+           cs_join(FindChan(chan));
+ 
++    if (cptr)
++      if ((ci = FindChan(chan)) && !IsChannelMember(cptr, Me.csptr))
++        if (!(ci->flags & CS_FORGET))
++          if (ci->flags & CS_SEENSERV)
++            es_sjoin(ci, cptr);
++										
+   #endif /* HYBRID_ONLY */
+ 
+   #endif
